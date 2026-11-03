@@ -1,37 +1,61 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { extractShortcode, isValidInstagramURL } from '@/lib/instagram';
+import type { MediaItem } from '@/types';
 
 export default function Home() {
   const [url, setUrl] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [media, setMedia] = useState<MediaItem | null>(null);
   const router = useRouter();
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Auto-fetch when valid URL is pasted
+  useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      if (url && isValidInstagramURL(url)) {
+        fetchMedia(url);
+      } else {
+        setMedia(null);
+        setError('');
+      }
+    }, 300); // 300ms debounce - instant feel!
+
+    return () => clearTimeout(timeoutId);
+  }, [url]);
+
+  const fetchMedia = async (instagramUrl: string) => {
+    setLoading(true);
     setError('');
 
-    if (!url.trim()) {
-      setError('Please enter an Instagram URL');
-      return;
-    }
+    try {
+      const response = await fetch('/api/resolve', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ url: instagramUrl }),
+      });
 
-    if (!isValidInstagramURL(url)) {
-      setError('Invalid Instagram URL. Please enter a valid post, reel, or IGTV link.');
-      return;
-    }
+      const data = await response.json();
 
-    const shortcode = extractShortcode(url);
-    if (!shortcode) {
-      setError('Could not extract media ID from URL');
-      return;
+      if (!data.success) {
+        setError(data.error || 'Failed to load media');
+        setMedia(null);
+      } else {
+        setMedia(data.data);
+        setError('');
+      }
+    } catch (err) {
+      setError('Failed to load media. Please try again.');
+      setMedia(null);
+    } finally {
+      setLoading(false);
     }
+  };
 
-    setLoading(true);
-    router.push(`/download/${shortcode}`);
+  const handleDownload = (mediaUrl: string) => {
+    window.open(mediaUrl, '_blank');
   };
 
   return (
@@ -46,7 +70,7 @@ export default function Home() {
         </p>
 
         {/* URL Input Form */}
-        <form onSubmit={handleSubmit} className="max-w-2xl mx-auto">
+        <form onSubmit={(e) => e.preventDefault()} className="max-w-2xl mx-auto">
           <div className="flex flex-col sm:flex-row gap-3">
             <input
               type="text"
@@ -56,22 +80,74 @@ export default function Home() {
               className="flex-1 px-4 py-3 rounded-lg border bg-background focus:outline-none focus:ring-2 focus:ring-primary"
               disabled={loading}
             />
-            <button
-              type="submit"
-              disabled={loading}
-              className="px-8 py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            >
-              {loading ? 'Processing...' : 'Download'}
-            </button>
           </div>
           {error && (
             <p className="mt-3 text-sm text-destructive text-left">{error}</p>
+          )}
+          {loading && (
+            <p className="mt-3 text-sm text-muted-foreground text-left">Loading preview...</p>
           )}
         </form>
 
         <p className="mt-4 text-sm text-muted-foreground">
           Example: https://www.instagram.com/p/ABC123xyz/
         </p>
+
+        {/* Media Preview - Shows automatically when URL is pasted */}
+        {media && !loading && (
+          <div className="max-w-2xl mx-auto mt-8">
+            <div className="border rounded-lg overflow-hidden bg-card shadow-lg">
+              {/* Media Display */}
+              <div className="relative">
+                {media.type === 'video' ? (
+                  <video
+                    src={media.media_urls[0]}
+                    poster={media.thumbnail_url}
+                    controls
+                    className="w-full"
+                  >
+                    Your browser does not support the video tag.
+                  </video>
+                ) : (
+                  <img
+                    src={media.thumbnail_url}
+                    alt={media.caption || 'Instagram post'}
+                    className="w-full"
+                  />
+                )}
+              </div>
+
+              {/* Media Info */}
+              <div className="p-4">
+                <div className="flex items-center gap-3 mb-3">
+                  <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                    <span className="text-sm font-semibold">{media.username[0]?.toUpperCase()}</span>
+                  </div>
+                  <div>
+                    <p className="font-semibold">@{media.username}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {new Date(media.timestamp).toLocaleDateString()}
+                    </p>
+                  </div>
+                </div>
+                {media.caption && (
+                  <p className="text-sm text-muted-foreground line-clamp-2 mb-4">{media.caption}</p>
+                )}
+
+                {/* Download Button */}
+                <button
+                  onClick={() => handleDownload(media.media_urls[0] || media.thumbnail_url)}
+                  className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-2"
+                >
+                  <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                  </svg>
+                  Download {media.type === 'video' ? 'Video' : 'Photo'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </section>
 
       {/* Features Section */}

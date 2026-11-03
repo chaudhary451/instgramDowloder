@@ -1,12 +1,14 @@
 # InstaDown - Instagram Downloader
 
-A fast, free Instagram downloader built with Next.js 14. Download posts, reels, and IGTV videos without watermarks.
+A fast, free Instagram downloader built with Next.js 14. Download posts, reels, stories, and profiles without watermarks.
 
 ## Features
 
 - ✅ Download posts, reels, IGTV videos
+- ✅ Download stories and profile content
 - ✅ No watermark, HD quality
 - ✅ Carousel support (multi-image posts)
+- ✅ Multiple resolution options for images
 - ✅ No login required
 - ✅ Rate limiting for fair use
 - ✅ Mobile responsive
@@ -17,6 +19,7 @@ A fast, free Instagram downloader built with Next.js 14. Download posts, reels, 
 - **Framework:** Next.js 14 (App Router)
 - **Styling:** Tailwind CSS
 - **Cache:** Upstash Redis (rate limiting)
+- **API:** SaveInsta.to proxy for media resolution
 - **Deployment:** Vercel
 
 ## Getting Started
@@ -55,16 +58,24 @@ Open [http://localhost:3000](http://localhost:3000)
 UPSTASH_REDIS_REST_URL=https://xxx.upstash.io
 UPSTASH_REDIS_REST_TOKEN=your-token-here
 
-# Optional (for stories/profile features)
+# Optional (for future enhancements)
 APIFY_API_TOKEN=apify_api_xxx
 ```
 
 ## How It Works
 
-1. User pastes Instagram URL
-2. Backend resolves media via Instagram oEmbed API
-3. Media URLs extracted from embed page
-4. User downloads directly from Instagram CDN
+1. User pastes Instagram URL (post, reel, story, or profile)
+2. Backend fetches media via SaveInsta.to API (primary) or Instagram oEmbed API (fallback)
+3. Media URLs extracted with multiple resolution options
+4. User downloads directly from Instagram CDN / SaveInsta CDN
+
+### Supported URL Types
+
+- **Posts:** `https://www.instagram.com/p/ABC123xyz/`
+- **Reels:** `https://www.instagram.com/reel/ABC123xyz/`
+- **IGTV:** `https://www.instagram.com/tv/ABC123xyz/`
+- **Stories:** `https://www.instagram.com/stories/username/123456789/`
+- **Profiles:** `https://www.instagram.com/username/`
 
 ## Rate Limiting
 
@@ -100,7 +111,7 @@ Works on any Node.js hosting:
 instadown/
 ├── app/
 │   ├── api/
-│   │   ├── resolve/       # Media resolution endpoint
+│   │   ├── resolve/       # Media resolution endpoint (SaveInsta + oEmbed)
 │   │   └── download/      # Download proxy endpoint
 │   ├── download/[shortcode]/  # Download page
 │   ├── layout.tsx         # Root layout
@@ -114,10 +125,22 @@ instadown/
 ├── lib/
 │   ├── instagram.ts       # URL parsing, validation
 │   ├── rate-limit.ts      # Rate limiting logic
-│   └── cache.ts           # Redis cache helpers
+│   ├── cache.ts           # Redis cache helpers
+│   └── saveinsta.ts       # SaveInsta API integration
 └── types/
     └── index.ts           # TypeScript types
 ```
+
+## API Integration
+
+This project integrates with [SaveInsta.to](https://saveinsta.to) via a TypeScript port of their PHP API. The integration:
+
+1. Fetches dynamic tokens from SaveInsta highlights page
+2. Obtains Cloudflare bypass token via userverify endpoint
+3. Searches for media via ajaxSearch endpoint
+4. Parses HTML response to extract images/videos with resolutions
+
+The original PHP implementation was from [im-syn/Instagram-Downloader](https://github.com/im-syn/Instagram-Downloader).
 
 ## Legal
 
